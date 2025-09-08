@@ -1,24 +1,22 @@
+// src/storage/records.js
 import AsyncStorage from "@react-native-async-storage/async-storage";
+const key = (op, level, n) => `megamozg:records:${op}:${level}:${n}`;
 
-const KEY = "megamozg:records";
-
-export const addRecord = async (ms) => {
+export const addRecord = async (op, level, n, ms) => {
   try {
-    const raw = await AsyncStorage.getItem(KEY);
+    const k = key(op, level, n);
+    const raw = await AsyncStorage.getItem(k);
     const arr = raw ? JSON.parse(raw) : [];
     arr.push({ ts: Date.now(), ms });
     arr.sort((a, b) => a.ms - b.ms);
-    await AsyncStorage.setItem(KEY, JSON.stringify(arr.slice(0, 20)));
-  } catch (e) {
-    // noop
-  }
+    await AsyncStorage.setItem(k, JSON.stringify(arr.slice(0, 5)));
+  } catch {}
 };
 
-export const getRecords = async () => {
+export const getRecords = async (op, level, n) => {
   try {
-    const raw = await AsyncStorage.getItem(KEY);
+    const raw = await AsyncStorage.getItem(key(op, level, n));
     return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
+  } catch { return []; }
 };
+
