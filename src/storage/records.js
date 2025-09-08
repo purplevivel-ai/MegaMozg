@@ -1,34 +1,24 @@
-// src/storage/records.js
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-const RECORDS_KEY = "MMT_RECORDS_V1";
-// entry: { correct, total, durationMs, ts }
+const KEY = "megamozg:records";
 
-export function modeKey(op, level) {
-  return `${op}_L${level}`;
-}
-function sortEntries(a, b) {
-  if (b.correct !== a.correct) return b.correct - a.correct;
-  return a.durationMs - b.durationMs; // быстрее — лучше
-}
-
-export async function loadRecords() {
+export const addRecord = async (ms) => {
   try {
-    const s = await AsyncStorage.getItem(RECORDS_KEY);
-    return s ? JSON.parse(s) : {};
-  } catch { return {}; }
-}
-export async function saveRecords(obj) {
-  try { await AsyncStorage.setItem(RECORDS_KEY, JSON.stringify(obj)); } catch {}
-}
+    const raw = await AsyncStorage.getItem(KEY);
+    const arr = raw ? JSON.parse(raw) : [];
+    arr.push({ ts: Date.now(), ms });
+    arr.sort((a, b) => a.ms - b.ms);
+    await AsyncStorage.setItem(KEY, JSON.stringify(arr.slice(0, 20)));
+  } catch (e) {
+    // noop
+  }
+};
 
-export async function addRecord(op, level, correct, total, durationMs) {
-  const key = modeKey(op, level);
-  const obj = await loadRecords();
-  const arr = Array.isArray(obj[key]) ? obj[key] : [];
-  arr.push({ correct, total, durationMs, ts: Date.now() });
-  arr.sort(sortEntries);
-  obj[key] = arr.slice(0, 5);
-  await saveRecords(obj);
-  return obj[key];
-}
+export const getRecords = async () => {
+  try {
+    const raw = await AsyncStorage.getItem(KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+};

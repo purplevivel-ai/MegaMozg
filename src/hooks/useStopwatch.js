@@ -1,25 +1,40 @@
-// src/hooks/useStopwatch.js
 import { useEffect, useRef, useState } from "react";
 
-export function useStopwatch(running) {
-  const [elapsed, setElapsed] = useState(0); // ms
-  useEffect(() => {
-    let id;
-    if (running) {
-      const startAt = Date.now() - elapsed;
-      id = setInterval(() => setElapsed(Date.now() - startAt), 50);
+export const useStopwatch = (autostart = false) => {
+  const [ms, setMs] = useState(0);
+  const timerRef = useRef(null);
+
+  const start = () => {
+    if (timerRef.current) return;
+    const startAt = Date.now() - ms;
+    timerRef.current = setInterval(() => setMs(Date.now() - startAt), 50);
+  };
+
+  const stop = () => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
     }
-    return () => { if (id) clearInterval(id); };
-  }, [running]);
-  const reset = () => setElapsed(0);
-  return { elapsed, reset };
-}
+  };
 
-export function formatMs(ms) {
-  const totalSec = Math.floor(ms / 1000);
-  const mm = String(Math.floor(totalSec / 60)).padStart(2, "0");
-  const ss = String(totalSec % 60).padStart(2, "0");
-  const cs = String(Math.floor((ms % 1000) / 10)).padStart(2, "0");
-  return `${mm}:${ss}:${cs}`;
-}
+  const reset = () => {
+    stop();
+    setMs(0);
+  };
 
+  useEffect(() => {
+    if (autostart) start();
+    return stop;
+  }, []);
+
+  return [ms, { start, stop, reset }];
+};
+
+export const formatMs = (ms) => {
+  const s = Math.floor(ms / 1000);
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  const ms2 = Math.floor((ms % 1000) / 10);
+  const pad = (n, w = 2) => String(n).padStart(w, "0");
+  return `${pad(m)}:${pad(sec)}.${pad(ms2)}`;
+};
