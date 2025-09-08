@@ -1,3 +1,4 @@
+// src/screens/QuizScreen.js
 import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, StyleSheet, Alert, BackHandler } from "react-native";
 import { QuizContext } from "../../App";
@@ -7,7 +8,21 @@ import OptionButton from "../components/OptionButton";
 import ProgressBar from "../components/ProgressBar";
 import * as Haptics from "expo-haptics";
 import { Audio } from "expo-av";
-import { HAS_SOUNDS, getAsset } from "../utils/audio";
+import { dingAsset, buzzAsset, HAS_SOUNDS } from "../utils/audio";
+
+async function play(type) {
+  if (!state.sound || !HAS_SOUNDS) return;
+  try {
+    const asset = getAsset(type);
+    if (!asset) return;
+    const { sound } = await Audio.Sound.createAsync(asset);
+    await sound.playAsync();
+    setTimeout(() => sound.unloadAsync(), 1000);
+  } catch (e) {
+    console.log("Sound error", e);
+  }
+}
+
 
 export default function QuizScreen({ navigation }) {
   const { state, dispatch } = useContext(QuizContext);
@@ -48,16 +63,13 @@ export default function QuizScreen({ navigation }) {
   const percent = useMemo(() => Math.round((index1-1) / state.n * 100), [state.index, state.n]);
 
   async function play(type) {
-    if (!state.sound || !HAS_SOUNDS) return;
+    if (!state.sound) return;
     try {
-      const asset = getAsset(type);
-      if (!asset) return;
-      const { sound } = await Audio.Sound.createAsync(asset);
+      const asset = type === "ok" ? require("../../assets/ding.mp3") : require("../../assets/buzz.mp3");
+      const { sound } = await Audio.Sound.createAsync(asset, { volume: 1.0 });
       await sound.playAsync();
-      setTimeout(() => sound.unloadAsync(), 1000);
-    } catch (e) {
-      console.log("Sound error", e);
-    }
+      setTimeout(()=> sound.unloadAsync(), 1000);
+    } catch {}
   }
 
   const formatMs = (ms) => {
@@ -71,6 +83,7 @@ export default function QuizScreen({ navigation }) {
 
   const nextQuestion = () => {
     if (state.index + 1 >= state.n) {
+      // Финиш
       if (timerRef.current) clearInterval(timerRef.current);
       navigation.replace("Results", { totalMs: ms });
       return;
@@ -93,6 +106,7 @@ export default function QuizScreen({ navigation }) {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       await play("bad");
       const upd = ["neutral","neutral","neutral","neutral"]; upd[idx] = "wrong"; setStatuses(upd);
+      // подсветим правильный
       const correctIdx = q.options.findIndex(x => x === q.correct);
       setTimeout(() => {
         const upd2 = [...upd]; upd2[correctIdx] = "correct"; setStatuses(upd2);

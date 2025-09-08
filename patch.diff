@@ -1,0 +1,50 @@
+diff --git a/src/utils/audio.js b/src/utils/audio.js
+index 1111111..2222222 100644
+--- a/src/utils/audio.js
++++ b/src/utils/audio.js
+@@ -1,2 +1,8 @@
+-// src/utils/audio.js
+-export const HAS_SOUNDS = false;
++// src/utils/audio.js
++
++export const HAS_SOUNDS = true;
++
++export const getAsset = (type) =>
++  type === "ok"
++    ? require("../../assets/sounds/ding.wav")
++    : require("../../assets/sounds/buzz.wav");
+diff --git a/src/screens/QuizScreen.js b/src/screens/QuizScreen.js
+index 3333333..4444444 100644
+--- a/src/screens/QuizScreen.js
++++ b/src/screens/QuizScreen.js
+@@ -8,7 +8,8 @@ import OptionButton from "../components/OptionButton";
+ import ProgressBar from "../components/ProgressBar";
+ import * as Haptics from "expo-haptics";
+-import { Audio } from "expo-av";
++import { Audio } from "expo-av";
++import { HAS_SOUNDS, getAsset } from "../utils/audio";
+ 
+ export default function QuizScreen({ navigation }) {
+   const { state, dispatch } = useContext(QuizContext);
+@@
+-  async function play(type) {
+-    if (!state.sound) return;
+-    try {
+-      const asset = type === "ok" ? require("../../assets/sounds/ding.wav") : require("../../assets/sounds/buzz.wav");
+-      const { sound } = await Audio.Sound.createAsync(asset, { volume: 1.0 });
+-      await sound.playAsync();
+-      setTimeout(() => sound.unloadAsync(), 1000);
+-    } catch {}
+-  }
++  async function play(type) {
++    if (!state.sound || !HAS_SOUNDS) return;
++    try {
++      const asset = getAsset(type);
++      if (!asset) return;
++      const { sound } = await Audio.Sound.createAsync(asset);
++      await sound.playAsync();
++      setTimeout(() => sound.unloadAsync(), 1000);
++    } catch (e) {
++      console.log("Sound error", e);
++    }
++  }
