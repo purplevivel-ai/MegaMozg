@@ -4,7 +4,7 @@ export const initialState = {
   op: 'add',             // add|sub|mul|div
   level: 1,              // 1|2|3
   n: 10,                 // 5..50
-  sound: true,
+  sound: false,
   index: 0,              // 0..n-1
   correctCount: 0,
   ms: 0,                 // текущий таймер

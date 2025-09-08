@@ -1,0 +1,143 @@
+// src/screens/QuizScreen.js
+import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
+import { View, Text, StyleSheet, Alert, BackHandler } from "react-native";
+import { QuizContext } from "../../App";
+import { STR } from "../i18n/strings";
+import { OPS, computeAnswer, generateOperands, generateOptions } from "../utils/math";
+import OptionButton from "../components/OptionButton";
+import ProgressBar from "../components/ProgressBar";
+import * as Haptics from "expo-haptics";
+import { Audio } from "expo-av";
+import { dingAsset, buzzAsset, HAS_SOUNDS } from "../utils/audio";
+
+async function play(type) {
+  if (!state.sound || !HAS_SOUNDS) return; // защита, если звука нет
+  try {
+    const asset = type === "ok" ? dingAsset : buzzAsset;
+    if (!asset) return;
+    const { sound } = await Audio.Sound.createAsync(asset, { volume: 1.0 });
+    await sound.playAsync();
+    setTimeout(() => sound.unloadAsync(), 1000);
+  } catch {}
+}
+
+
+
+export default function QuizScreen({ navigation }) {
+  const { state, dispatch } = useContext(QuizContext);
+  const t = STR[state.locale];
+
+  const [q, setQ] = useState(() => {
+    const operands = generateOperands(state.level, state.op);
+    const correct = computeAnswer(operands);
+    return { operands, correct, options: generateOptions(correct, state.level, state.op) };
+  });
+
+  const [statuses, setStatuses] = useState(["neutral","neutral","neutral","neutral"]);
+  const [ms, setMs] = useState(0);
+  const timerRef = useRef(null);
+  const startAtRef = useRef(Date.now());
+
+  // Запуск секундомера всей сессии
+  useEffect(() => {
+    startAtRef.current = Date.now();
+    timerRef.current = setInterval(()=> setMs(Date.now()-startAtRef.current), 50);
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, []);
+
+  // Back → подтверждение
+  useEffect(() => {
+    const onBack = () => {
+      Alert.alert(t.quitConfirmTitle, t.quitConfirmMsg, [
+        { text: t.no, style: "cancel" },
+        { text: t.yes, style: "destructive", onPress: () => navigation.goBack() }
+      ]);
+      return true;
+    };
+    const sub = BackHandler.addEventListener("hardwareBackPress", onBack);
+    return () => sub.remove();
+  }, [navigation, t]);
+
+  const index1 = state.index + 1;
+  const percent = useMemo(() => Math.round((index1-1) / state.n * 100), [state.index, state.n]);
+
+  async function play(type) {
+    if (!state.sound) return;
+    try {
+      const asset = type === "ok" ? require("../../assets/ding.mp3") : require("../../assets/buzz.mp3");
+      const { sound } = await Audio.Sound.createAsync(asset, { volume: 1.0 });
+      await sound.playAsync();
+      setTimeout(()=> sound.unloadAsync(), 1000);
+    } catch {}
+  }
+
+  const formatMs = (ms) => {
+    const s = Math.floor(ms / 1000);
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    const ms2 = Math.floor((ms % 1000) / 10);
+    const pad = (n, w = 2) => String(n).padStart(w, "0");
+    return `${pad(m)}:${pad(sec)}.${pad(ms2)}`;
+  };
+
+  const nextQuestion = () => {
+    if (state.index + 1 >= state.n) {
+      // Финиш
+      if (timerRef.current) clearInterval(timerRef.current);
+      navigation.replace("Results", { totalMs: ms });
+      return;
+    }
+    dispatch({ type: "NEXT" });
+    const operands = generateOperands(state.level, state.op);
+    const correct = computeAnswer(operands);
+    setQ({ operands, correct, options: generateOptions(correct, state.level, state.op) });
+    setStatuses(["neutral","neutral","neutral","neutral"]);
+  };
+
+  const onAnswer = async (val, idx) => {
+    const isOk = val === q.correct;
+    if (isOk) {
+      await play("ok");
+      const upd = ["neutral","neutral","neutral","neutral"]; upd[idx] = "correct"; setStatuses(upd);
+      dispatch({ type: "ANSWER_OK" });
+      setTimeout(nextQuestion, 600);
+    } else {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      await play("bad");
+      const upd = ["neutral","neutral","neutral","neutral"]; upd[idx] = "wrong"; setStatuses(upd);
+      // подсветим правильный
+      const correctIdx = q.options.findIndex(x => x === q.correct);
+      setTimeout(() => {
+        const upd2 = [...upd]; upd2[correctIdx] = "correct"; setStatuses(upd2);
+        setTimeout(nextQuestion, 800);
+      }, 200);
+    }
+  };
+
+  return (
+    <View style={styles.wrap}>
+      <ProgressBar value={percent} />
+      <Text style={styles.progress}>{t.questionOf(index1, state.n)}</Text>
+
+      <Text style={styles.task}>
+        {q.operands.a} {OPS[state.op]} {q.operands.b} = ?
+      </Text>
+
+      <Text style={styles.time}>{t.time}: <Text style={{fontWeight:"800"}}>{formatMs(ms)}</Text></Text>
+
+      <View style={styles.grid}>
+        {q.options.map((opt, i) => (
+          <OptionButton key={i} label={opt} status={statuses[i]} onPress={() => onAnswer(opt, i)} />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  wrap: { flex:1, paddingTop: 50, paddingHorizontal: 16, backgroundColor:"#fff" },
+  progress: { marginTop: 8, marginBottom: 12, textAlign: "center", fontSize: 16, fontWeight: "600" },
+  task: { fontSize: 36, fontWeight: "800", textAlign: "center", marginVertical: 20 },
+  time: { fontSize: 16, textAlign: "center", marginBottom: 10 },
+  grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", marginTop: 6 },
+});
